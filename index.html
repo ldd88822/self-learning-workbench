@@ -128,8 +128,11 @@
     return result;
   }
 
-  // ==================== 远程知识拉取（GitHub Actions 每日生成 today.json，失败回退本地） ====================
-  // 线上 github.io 同域读取 ./today.json；本地直接打开（file:）则走本地库
+  // ==================== 远程知识拉取 ====================
+  // 优先级：① 直连维基百科「历史上的今天」(CORS 开放，线上每日真实历史)
+  //         ② 回退 ./today.json (由 GitHub Actions / 静态生成)
+  //         ③ 再失败则走本地知识库
+  // 本地双击 (file:) 直接走本地库
   const IS_LOCAL = (location.protocol === 'file:' || location.hostname === 'localhost');
   const REMOTE_JSON = './today.json';
 
@@ -140,30 +143,63 @@
     return h.toString(36);
   }
 
+  const CN_KW = ['中国','中华','汉','唐','宋','元','明','清','秦','隋','北京','中原','华夏','三国','战国','春秋','秦始皇','周朝','商','辽','金','西夏','民国','长征','鸦片','慈禧'];
+  function isChina(text) { return CN_KW.some(k => text.includes(k)); }
+  function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // ① 直连维基百科：历史上的今天（按 UTC 日期，保证全球同一天一致）
+  async function fetchWikiToday() {
+    const now = new Date();
+    const mm = now.getUTCMonth() + 1;
+    const dd = now.getUTCDate();
+    const res = await fetch(`https://zh.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const events = j.events || [];
+    if (!events.length) return null;
+    const cn = events.filter(e => isChina(e.text));
+    const world = events.filter(e => !isChina(e.text));
+    const w = world.length ? rnd(world) : rnd(events);
+    const c = cn.length ? rnd(cn) : rnd(events);
+    const out = {};
+    out.world = { id: 'wiki-world-' + hashStr(w.text), cat: 'world', title: '历史上的今天', content: w.text, source: '维基百科·历史上的今天' };
+    out.china = { id: 'wiki-china-' + hashStr(c.text), cat: 'china', title: '历史上的今天', content: c.text, source: '维基百科·历史上的今天' };
+    const maoArr = knowledgeBase.filter(k => k.cat === 'mao');
+    const aiArr = knowledgeBase.filter(k => k.cat === 'ai');
+    const m = rnd(maoArr), a = rnd(aiArr);
+    out.mao = { id: 'wiki-mao-' + m.id, cat: 'mao', title: m.title, content: m.content, source: m.source };
+    out.ai = { id: 'wiki-ai-' + a.id, cat: 'ai', title: a.title, content: a.content, source: a.source };
+    return out;
+  }
+
   async function fetchRemoteKnowledge() {
     if (IS_LOCAL) return null; // 本地直接打开，跳过远程
+    // ① 维基直连
+    try {
+      const wiki = await fetchWikiToday();
+      if (wiki) return wiki;
+    } catch (e) { console.warn('维基拉取失败，尝试回退', e); }
+    // ② 回退 today.json
     try {
       const res = await fetch(REMOTE_JSON, { cache: 'no-store' });
-      if (!res.ok) return null;
-      const data = await res.json();
-      const result = {};
-      for (const cat of ['world', 'china', 'mao', 'ai']) {
-        if (data[cat]) {
-          result[cat] = {
-            // 稳定 id：分类 + 内容哈希，避免随机 id 导致标记状态丢失/重复
-            id: 'remote-' + cat + '-' + hashStr((data[cat].title || '') + '|' + (data[cat].content || '')),
-            cat: cat,
-            title: data[cat].title,
-            content: data[cat].content,
-            source: data[cat].source || "全网摘录"
-          };
+      if (res.ok) {
+        const data = await res.json();
+        const result = {};
+        for (const cat of ['world', 'china', 'mao', 'ai']) {
+          if (data[cat]) {
+            result[cat] = {
+              id: 'remote-' + cat + '-' + hashStr((data[cat].title || '') + '|' + (data[cat].content || '')),
+              cat: cat,
+              title: data[cat].title,
+              content: data[cat].content,
+              source: data[cat].source || "线上摘录"
+            };
+          }
         }
+        if (Object.keys(result).length === 4) return result;
       }
-      return result;
-    } catch (e) {
-      console.warn("获取远程知识失败，使用本地缓存", e);
-      return null;
-    }
+    } catch (e) { console.warn('today.json 拉取失败', e); }
+    return null; // 最终回退本地库
   }
 
   let todayItems = {};
