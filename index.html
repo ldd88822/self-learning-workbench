@@ -367,6 +367,22 @@
     rebuildTodayMap();
     renderToday();
     updateLibCount();
+
+    // 跨天自动刷新：页面常驻时，日期变化自动切换到当天新内容，无需手动刷新
+    let _lastDate = new Date().toISOString().split('T')[0];
+    setInterval(() => {
+      const d = new Date().toISOString().split('T')[0];
+      if (d === _lastDate) return;
+      _lastDate = d;
+      fetchRemoteKnowledge().then(remote => {
+        if (remote && Object.keys(remote).length === 4) todayItems = remote;
+        else todayItems = getTodayItemsByCategory();
+        rebuildTodayMap();
+        const todayTab = document.querySelector('.tab[data-tab="today"]');
+        if (todayTab && todayTab.classList.contains('active')) renderToday();
+        updateLibCount();
+      });
+    }, 60000);
   }
 
   document.addEventListener('DOMContentLoaded', initApp);
