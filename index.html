@@ -128,11 +128,10 @@
     return result;
   }
 
-  // ==================== 远程知识拉取（Pages Functions 同域，失败回退本地） ====================
-  // 部署到 Cloudflare Pages 后用同域相对路径；本地直接打开则走本地库
-  const WORKER_API = (location.hostname === 'localhost' || location.protocol === 'file:')
-    ? null
-    : location.origin + "/today";
+  // ==================== 远程知识拉取（GitHub Actions 每日生成 today.json，失败回退本地） ====================
+  // 线上 github.io 同域读取 ./today.json；本地直接打开（file:）则走本地库
+  const IS_LOCAL = (location.protocol === 'file:' || location.hostname === 'localhost');
+  const REMOTE_JSON = './today.json';
 
   // 简易字符串哈希，用于生成稳定的远程条目 id（同一天内容不变则 id 不变，标记状态可跨刷新保持）
   function hashStr(s) {
@@ -142,10 +141,9 @@
   }
 
   async function fetchRemoteKnowledge() {
-    if (!WORKER_API) return null; // 本地直接打开，跳过远程
+    if (IS_LOCAL) return null; // 本地直接打开，跳过远程
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`${WORKER_API}?date=${today}`);
+      const res = await fetch(REMOTE_JSON, { cache: 'no-store' });
       if (!res.ok) return null;
       const data = await res.json();
       const result = {};
