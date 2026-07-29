@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#c45a3c">
+  <title>自我学习工作台</title>
+  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%E8%87%AA%E6%88%91%E5%AD%A6%E4%B9%A0%E5%B7%A5%E4%BD%9C%E5%8F%B0%22%2C%22short_name%22%3A%22%E5%AD%A6%E4%B9%A0%E5%8F%B0%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f5f0e8%22%2C%22theme_color%22%3A%22%23c45a3c%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20100%20100'%3E%3Ctext%20y%3D'.9em'%20font-size%3D'90'%3E%F0%9F%93%9A%3C%2Ftext%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background:#f5f0e8; color:#2e241f; min-height:100vh; display:flex; flex-direction:column; }
+    header { background:#c45a3c; color:#fff; padding:1rem 1.2rem; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 8px rgba(0,0,0,0.1); position:sticky; top:0; z-index:10; }
+    header h1 { font-size:1.4rem; font-weight:600; display:flex; align-items:center; gap:0.4rem; }
+    .tab-bar { display:flex; background:#fff; position:sticky; top:3.7rem; z-index:9; border-bottom:1px solid #e0d7cc; }
+    .tab { flex:1; text-align:center; padding:0.8rem 0.4rem; font-weight:600; color:#8b7a6b; border-bottom:3px solid transparent; transition:0.2s; cursor:pointer; font-size:0.95rem; }
+    .tab.active { color:#c45a3c; border-bottom-color:#c45a3c; }
+    .container { flex:1; padding:1.2rem; max-width:640px; margin:0 auto; width:100%; overflow-y:auto; }
+    .card { background:#fff; border-radius:20px; padding:1.5rem; box-shadow:0 6px 18px rgba(0,0,0,0.04); margin-bottom:1.2rem; }
+    .badge { display:inline-block; font-size:0.75rem; padding:0.25rem 0.9rem; border-radius:20px; font-weight:700; margin-bottom:0.8rem; letter-spacing:0.3px; }
+    .badge.world { background:#dde7f0; color:#1e4a7a; }
+    .badge.china { background:#f2e6dc; color:#8b5e3c; }
+    .badge.mao { background:#fde8e0; color:#b53b2c; }
+    .badge.ai { background:#e2f0e5; color:#206a3e; }
+    .title { font-size:1.2rem; font-weight:700; margin-bottom:0.5rem; line-height:1.4; }
+    .content { color:#4a3f38; line-height:1.7; margin-bottom:1rem; font-size:0.95rem; }
+    .source { font-size:0.8rem; color:#a69484; font-style:italic; margin-bottom:0.8rem; }
+    .btn-group { display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap; }
+    .btn { padding:0.6rem 1.2rem; border-radius:30px; font-weight:600; border:none; cursor:pointer; font-size:0.85rem; transition:0.2s; display:inline-flex; align-items:center; gap:0.3rem; background:transparent; }
+    .btn-primary { background:#c45a3c; color:#fff; }
+    .btn-primary:active { background:#a8432e; }
+    .btn-outline { border:2px solid #c45a3c; color:#c45a3c; }
+    .btn-outline:active { background:rgba(196,90,60,0.05); }
+    .btn-small { padding:0.4rem 0.9rem; font-size:0.8rem; }
+    .library-list { list-style:none; }
+    .lib-item { background:#fff; border-radius:16px; padding:1rem 1.2rem; margin-bottom:0.7rem; box-shadow:0 2px 8px rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; }
+    .lib-text { flex:1; min-width:160px; }
+    .lib-actions { display:flex; gap:0.4rem; }
+    .empty-state { text-align:center; padding:3.5rem 1rem; color:#a69484; }
+    .install-banner { background:#fff7e0; border-left:4px solid #f0b429; border-radius:12px; padding:0.8rem 1rem; margin-bottom:1.2rem; font-size:0.9rem; display:none; align-items:center; gap:0.5rem; }
+    .install-banner button { background:none; border:none; font-size:1.2rem; cursor:pointer; margin-left:auto; color:#8b7a6b; }
+    .counter { font-size:0.8rem; color:#a69484; margin-bottom:0.8rem; }
+    .multi-card-grid { display: flex; flex-direction: column; gap: 1rem; }
+    @media (max-width:400px) { .btn { padding:0.5rem 1rem; font-size:0.8rem; } }
+  </style>
+</head>
+<body>
+<header>
+  <h1>📚 自我学习台</h1>
+  <span style="font-size:0.9rem; opacity:0.9;">每日四知</span>
+</header>
+<div class="tab-bar">
+  <div class="tab active" data-tab="today">✨ 今日推送</div>
+  <div class="tab" data-tab="library">📖 学习库 <span id="libCount" style="font-size:0.7rem; background:#c45a3c; color:#fff; padding:0.1rem 0.5rem; border-radius:10px; margin-left:0.2rem; display:none;">0</span></div>
+</div>
+<div class="container" id="app-container"></div>
+
+<script>
+(function() {
+  // ==================== 知识库（30条，四大分类） ====================
+  const knowledgeBase = [
+    // 🌍 世界历史 (8条)
+    { id:1, cat:'world', title:'苏格拉底的诘问', content:'苏格拉底（前469—前399）通过不断提问引导人发现真理，即“精神助产术”。他以身殉道，影响了柏拉图和整个西方哲学。', source:'《西方哲学史》' },
+    { id:2, cat:'world', title:'罗马共和国的兴衰', content:'公元前509年罗马建立共和国，设元老院和执政官。扩张带来危机，最终在公元前27年屋大维建立帝制。', source:'世界历史专题' },
+    { id:3, cat:'world', title:'文艺复兴与人文主义', content:'14—17世纪，始于意大利的文艺复兴提倡人性、理性与艺术，代表有达·芬奇、米开朗基罗、莎士比亚。', source:'欧洲文化史' },
+    { id:4, cat:'world', title:'法国大革命的思想前奏', content:'伏尔泰倡导自由与理性，卢梭提出“社会契约论”，直接点燃了1789年法国大革命。', source:'启蒙运动史' },
+    { id:5, cat:'world', title:'工业革命改变世界', content:'18世纪60年代从英国开始，瓦特改良蒸汽机，机器生产取代手工，城市化加速。', source:'全球经济史' },
+    { id:6, cat:'world', title:'美国独立与《独立宣言》', content:'1776年7月4日，北美十三州通过《独立宣言》，宣布脱离英国，强调“人人生而平等”。', source:'美国建国史' },
+    { id:7, cat:'world', title:'明治维新：日本近代化', content:'1868年起，日本全盘西化，推行“富国强兵”“文明开化”，仅数十年跻身世界强国。', source:'日本近代史' },
+    { id:8, cat:'world', title:'第一次世界大战的导火索', content:'1914年奥匈帝国皇储斐迪南遇刺，引爆世界大战，造成约1600万人死亡。', source:'一战简史' },
+
+    // 🇨🇳 中国历史 (7条)
+    { id:9, cat:'china', title:'孔子与仁学', content:'孔子（前551—前479）创立儒家，核心是“仁”与“礼”，强调“己所不欲，勿施于人”。', source:'《论语》' },
+    { id:10, cat:'china', title:'秦始皇统一六国', content:'公元前221年，秦王嬴政灭六国，统一文字、货币、度量衡，设郡县制。', source:'《史记》' },
+    { id:11, cat:'china', title:'汉武帝的雄才大略', content:'汉武帝刘彻（前141—前87在位）尊儒术、开丝路、击匈奴，开创汉武盛世。', source:'《汉书》' },
+    { id:12, cat:'china', title:'贞观之治：李世民的治国智慧', content:'唐太宗以隋亡为鉴，广纳谏言，轻徭薄赋，开创“贞观之治”，被尊为“天可汗”。', source:'《贞观政要》' },
+    { id:13, cat:'china', title:'王安石变法', content:'北宋熙宁年间，王安石推行青苗、免役等新法，试图富国强兵，终因保守势力反对失败。', source:'《宋史》' },
+    { id:14, cat:'china', title:'郑和下西洋', content:'1405—1433年，明成祖派郑和率庞大船队七次远航，最远达非洲东岸。', source:'《明史》' },
+    { id:15, cat:'china', title:'康乾盛世的辉煌与阴影', content:'康熙、雍正、乾隆三朝疆域辽阔，经济繁荣，但闭关锁国埋下近代落后伏笔。', source:'清史讲座' },
+
+    // 📕 毛选智慧 (7条)
+    { id:16, cat:'mao', title:'《实践论》：认识依赖于实践', content:'“你要知道梨子的滋味，你就得变革梨子，亲口吃一吃。”理论必须结合实际。', source:'《毛选》第一卷' },
+    { id:17, cat:'mao', title:'抓住主要矛盾', content:'“在复杂的事物的发展过程中，有许多的矛盾存在，其中必有一种是主要的矛盾。”', source:'《矛盾论》' },
+    { id:18, cat:'mao', title:'调查研究就是解决问题', content:'“没有调查，没有发言权。”一切结论产生于调查情况的末尾，而不是在它的先头。', source:'《反对本本主义》' },
+    { id:19, cat:'mao', title:'论持久战：战略分析范例', content:'毛泽东全面分析中日特点，驳斥“速胜论”与“亡国论”，指出战争是持久战。', source:'《论持久战》' },
+    { id:20, cat:'mao', title:'群众路线的工作方法', content:'“从群众中来，到群众中去”，将分散意见集中起来，化为系统意见，再到群众中去。', source:'《关于领导方法的若干问题》' },
+    { id:21, cat:'mao', title:'实事求是：根本原则', content:'“‘实事’就是客观事物，‘是’就是内部联系，‘求’就是我们去研究。”', source:'《改造我们的学习》' },
+    { id:22, cat:'mao', title:'批评与自我批评', content:'“知无不言，言无不尽，言者无罪，闻者足戒，有则改之，无则加勉。”', source:'延安整风文献' },
+
+    // 🤖 AI工作技巧 (8条)
+    { id:23, cat:'ai', title:'高效 Prompt 公式', content:'明确角色+任务+格式+限制。例如：“你是资深编辑，将以下要点改写成200字新闻稿，语气专业。”', source:'AI提示工程' },
+    { id:24, cat:'ai', title:'AI辅助阅读长文档', content:'将PDF交给AI：“总结核心观点，列出三个论据，并用表格对比”，压缩阅读时间。', source:'AI办公技巧' },
+    { id:25, cat:'ai', title:'用AI头脑风暴', content:'让AI生成10个创意方向，再挑出3个深化。“给我10个提高学习动力的产品点子。”', source:'创造力工具' },
+    { id:26, cat:'ai', title:'自动化邮件与报告', content:'通过AI+Zapier/快捷指令，自动生成周报、回复常规邮件，每天节省1—2小时。', source:'效率自动化' },
+    { id:27, cat:'ai', title:'用AI学习新领域', content:'“我是初中生，请用简单比喻解释量子计算”，再让AI出题考你，快速入门。', source:'学习加速' },
+    { id:28, cat:'ai', title:'AI帮你调试代码', content:'把报错信息复制给AI：“这段代码为什么报错？请指出原因并给出修改后代码。”', source:'开发者必备' },
+    { id:29, cat:'ai', title:'会议纪要自动整理', content:'用AI转录会议录音，生成“议题、决定、待办事项”结构化纪要。', source:'会议效率' },
+    { id:30, cat:'ai', title:'多语言翻译与润色', content:'先用AI直译，再让AI以目标语言母语者身份润色，搭配术语表效果更佳。', source:'翻译实践' }
+  ];
+
+  // 分类顺序
+  const categories = ['world', 'china', 'mao', 'ai'];
+
+  // ==================== 存储逻辑 ====================
+  const LIB_KEY = 'learning_library_v4';
+  function getLib() {
+    try { return JSON.parse(localStorage.getItem(LIB_KEY)) || []; } catch(e) { return []; }
+  }
+  function saveLib(lib) {
+    try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); } catch(e) {}
+  }
+
+  // ==================== 为每个分类计算今日条目 ====================
+  function getTodayItemsByCategory() {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const seedBase = today.split('-').reduce((a,b)=>a+parseInt(b), 0);
+    const result = {};
+    categories.forEach((cat, idx) => {
+      // 每个分类用自己的种子（seedBase + idx），保证每天每个分类稳定不同
+      const seed = seedBase + idx * 7;
+      const catItems = knowledgeBase.filter(item => item.cat === cat);
+      if (catItems.length > 0) {
+        const item = catItems[seed % catItems.length];
+        result[cat] = item;
+      }
+    });
+    return result;
+  }
+
+  // ==================== 远程知识拉取（Pages Functions 同域，失败回退本地） ====================
+  // 部署到 Cloudflare Pages 后用同域相对路径；本地直接打开则走本地库
+  const WORKER_API = (location.hostname === 'localhost' || location.protocol === 'file:')
+    ? null
+    : location.origin + "/today";
+
+  // 简易字符串哈希，用于生成稳定的远程条目 id（同一天内容不变则 id 不变，标记状态可跨刷新保持）
+  function hashStr(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+    return h.toString(36);
+  }
+
+  async function fetchRemoteKnowledge() {
+    if (!WORKER_API) return null; // 本地直接打开，跳过远程
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await fetch(`${WORKER_API}?date=${today}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const result = {};
+      for (const cat of ['world', 'china', 'mao', 'ai']) {
+        if (data[cat]) {
+          result[cat] = {
+            // 稳定 id：分类 + 内容哈希，避免随机 id 导致标记状态丢失/重复
+            id: 'remote-' + cat + '-' + hashStr((data[cat].title || '') + '|' + (data[cat].content || '')),
+            cat: cat,
+            title: data[cat].title,
+            content: data[cat].content,
+            source: data[cat].source || "全网摘录"
+          };
+        }
+      }
+      return result;
+    } catch (e) {
+      console.warn("获取远程知识失败，使用本地缓存", e);
+      return null;
+    }
+  }
+
+  let todayItems = {};
+  let todayMap = {};
+  function rebuildTodayMap() {
+    todayMap = {};
+    Object.values(todayItems).forEach(i => { if (i) todayMap[String(i.id)] = i; });
+  }
+
+  // ==================== UI渲染 ====================
+  const container = document.getElementById('app-container');
+  const tabs = document.querySelectorAll('.tab');
+  const libCountSpan = document.getElementById('libCount');
+
+  function updateLibCount() {
+    const len = getLib().length;
+    libCountSpan.textContent = len;
+    libCountSpan.style.display = len > 0 ? 'inline-block' : 'none';
+  }
+
+  function renderToday() {
+    const catMeta = {
+      world: { cls:'world', name:'🌍 世界历史' },
+      china: { cls:'china', name:'🇨🇳 中国历史' },
+      mao: { cls:'mao', name:'📕 毛选智慧' },
+      ai: { cls:'ai', name:'🤖 AI 技巧' }
+    };
+    const lib = getLib();
+
+    let cardsHtml = '';
+    categories.forEach(cat => {
+      const item = todayItems[cat];
+      if (!item) return;
+      const meta = catMeta[cat] || { cls:'', name:cat };
+      const isMarked = lib.some(i => String(i.id) === String(item.id));
+      cardsHtml += `
+        <div class="card">
+          <span class="badge ${meta.cls}">${meta.name}</span>
+          <div class="title">${item.title}</div>
+          <div class="content">${item.content}</div>
+          <div class="source">—— ${item.source}</div>
+          <div class="btn-group">
+            <button class="btn ${isMarked ? 'btn-outline' : 'btn-primary'} mark-btn" data-id="${item.id}" data-cat="${cat}">
+              ${isMarked ? '✅ 已标记' : '❤️ 标记学习'}
+            </button>
+            <button class="btn btn-outline share-btn" data-id="${item.id}">📤 分享</button>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = `
+      <div class="install-banner" id="installBanner">
+        💡 点浏览器菜单“添加到主屏幕”，随时学习
+        <button id="closeBannerBtn">✕</button>
+      </div>
+      <div class="multi-card-grid">
+        ${cardsHtml}
+      </div>
+    `;
+
+    // 安装横幅
+    const banner = document.getElementById('installBanner');
+    if (window.matchMedia('(display-mode: standalone)').matches || localStorage.getItem('hide_banner')) {
+      banner.style.display = 'none';
+    } else {
+      banner.style.display = 'flex';
+      document.getElementById('closeBannerBtn').addEventListener('click', ()=>{
+        banner.style.display = 'none';
+        localStorage.setItem('hide_banner', '1');
+      });
+    }
+
+    // 按钮事件绑定
+    document.querySelectorAll('.mark-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        toggleMarkById(id);
+      });
+    });
+    document.querySelectorAll('.share-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        const item = todayMap[id] || knowledgeBase.find(k => String(k.id) === String(id));
+        if (item) shareItem(item);
+      });
+    });
+  }
+
+  function toggleMarkById(id) {
+    let lib = getLib();
+    const idx = lib.findIndex(i => String(i.id) === String(id));
+    if (idx > -1) {
+      lib.splice(idx, 1);
+    } else {
+      const item = todayMap[String(id)] || knowledgeBase.find(k => String(k.id) === String(id));
+      if (item) {
+        lib.push({
+          id: item.id,
+          title: item.title,
+          content: item.content,
+          cat: item.cat,
+          source: item.source,
+          dateAdded: new Date().toISOString()
+        });
+      }
+    }
+    saveLib(lib);
+    renderToday(); // 重新渲染以更新按钮状态
+    updateLibCount();
+  }
+
+  function renderLibrary() {
+    const lib = getLib();
+    updateLibCount();
+    if (lib.length === 0) {
+      container.innerHTML = `<div class="empty-state">📭 学习库还是空的<br>去「今日推送」标记你喜欢的知识吧</div>`;
+      return;
+    }
+    let html = `<div class="counter">共 ${lib.length} 条已保存</div><ul class="library-list">`;
+    lib.forEach(item => {
+      html += `
+        <li class="lib-item">
+          <div class="lib-text">
+            <strong>${item.title}</strong>
+            <div style="font-size:0.8rem; color:#8b7a6b;">${item.content.substring(0,35)}…</div>
+          </div>
+          <div class="lib-actions">
+            <button class="btn btn-outline btn-small share-lib-btn" data-id="${item.id}">📤</button>
+            <button class="btn btn-outline btn-small delete-lib-btn" data-id="${item.id}">🗑</button>
+          </div>
+        </li>`;
+    });
+    html += `</ul>
+      <div style="display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-small" id="exportLibBtn">📋 导出全部</button>
+        <button class="btn btn-outline btn-small" id="clearLibBtn">⚠️ 清空学习库</button>
+      </div>`;
+    container.innerHTML = html;
+
+    document.querySelectorAll('.share-lib-btn').forEach(b => {
+      b.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        const entry = getLib().find(i => String(i.id) === String(id));
+        if (entry) shareItem(entry);
+      });
+    });
+    document.querySelectorAll('.delete-lib-btn').forEach(b => {
+      b.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        saveLib(getLib().filter(i => String(i.id) !== String(id)));
+        renderLibrary();
+        updateLibCount();
+      });
+    });
+    document.getElementById('exportLibBtn').addEventListener('click', ()=>{
+      const text = getLib().map(i => `⭐ ${i.title}\n${i.content}\n——${i.source}`).join('\n\n---\n\n');
+      if (navigator.share) {
+        navigator.share({ title:'我的学习库', text }).catch(()=>{});
+      } else {
+        navigator.clipboard.writeText(text).then(()=>alert('已复制到剪贴板，可粘贴分享')).catch(()=>{});
+      }
+    });
+    document.getElementById('clearLibBtn').addEventListener('click', ()=>{
+      if (confirm('确定清空所有已保存的知识吗？')) {
+        saveLib([]);
+        renderLibrary();
+        updateLibCount();
+      }
+    });
+  }
+
+  function shareItem(item) {
+    const text = `📚 ${item.title}\n\n${item.content}\n\n——来源：${item.source}`;
+    if (navigator.share) {
+      navigator.share({ title: item.title, text }).catch(()=>{});
+    } else {
+      navigator.clipboard.writeText(text).then(()=>alert('已复制到剪贴板，可粘贴分享')).catch(()=>{});
+    }
+  }
+
+  // ==================== Tab切换 ====================
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      tab.dataset.tab === 'today' ? renderToday() : renderLibrary();
+    });
+  });
+
+  // 初始渲染（异步：优先远程，失败回退本地）
+  async function initApp() {
+    const remote = await fetchRemoteKnowledge();
+    if (remote && Object.keys(remote).length === 4) {
+      todayItems = remote;
+    } else {
+      todayItems = getTodayItemsByCategory();
+    }
+    rebuildTodayMap();
+    renderToday();
+    updateLibCount();
+  }
+
+  document.addEventListener('DOMContentLoaded', initApp);
+
+  // Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
