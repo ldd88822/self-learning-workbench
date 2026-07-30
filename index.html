@@ -265,6 +265,9 @@
         💡 点浏览器菜单“添加到主屏幕”，随时学习
         <button id="closeBannerBtn">✕</button>
       </div>
+      <div style="text-align:right;margin-bottom:0.8rem;">
+        <button class="btn btn-outline btn-small" id="realHistoryBtn">🌐 真实历史</button>
+      </div>
       <div class="multi-card-grid">
         ${cardsHtml}
       </div>
@@ -295,6 +298,26 @@
         const item = todayMap[id] || knowledgeBase.find(k => String(k.id) === String(id));
         if (item) shareItem(item);
       });
+    });
+
+    // 手动拉取「真实历史上的今天」（维基），由用户主动触发，避免自动跳动
+    const rhBtn = document.getElementById('realHistoryBtn');
+    if (rhBtn) rhBtn.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (IS_LOCAL) { alert('本地打开无法访问远程，请部署到线上后使用该功能。'); return; }
+      btn.textContent = '⏳ 获取中…';
+      btn.disabled = true;
+      const remote = await fetchRemoteKnowledge();
+      btn.disabled = false;
+      btn.textContent = '🌐 真实历史';
+      if (remote && remote.world && remote.world.source && remote.world.source.includes('维基百科')) {
+        todayItems = { ...todayItems, world: remote.world, china: remote.china, mao: remote.mao, ai: remote.ai };
+        rebuildTodayMap();
+        renderToday();
+        updateLibCount();
+      } else {
+        alert('维基暂不可用（可能被墙或网络不通）。\n内置知识已按日期轮换，可在能访问维基的网络下重试。');
+      }
     });
   }
 
@@ -399,39 +422,24 @@
     });
   });
 
-  // 初始渲染：先立刻用本地库渲染（保证永不白屏），再异步尝试远程更新
+  // 初始渲染：单一数据源（内嵌库 + 日期轮换），本地与线上完全一致，永不自动跳动
   function initApp() {
-    // 立即渲染本地内容，任何网络异常都不会导致空白
     todayItems = getTodayItemsByCategory();
     rebuildTodayMap();
     renderToday();
     updateLibCount();
 
-    // 异步拉取远程，成功则刷新；失败/超时不影响已显示内容
-    fetchRemoteKnowledge().then(remote => {
-      if (remote && Object.keys(remote).length === 4) {
-        todayItems = remote;
-        rebuildTodayMap();
-        const todayTab = document.querySelector('.tab[data-tab="today"]');
-        if (!todayTab || todayTab.classList.contains('active')) renderToday();
-        updateLibCount();
-      }
-    });
-
-    // 跨天自动刷新：页面常驻时，日期变化自动切换到当天新内容
+    // 跨天自动刷新：仅用内置库切换，稳定不跳动
     let _lastDate = new Date().toISOString().split('T')[0];
     setInterval(() => {
       const d = new Date().toISOString().split('T')[0];
       if (d === _lastDate) return;
       _lastDate = d;
-      fetchRemoteKnowledge().then(remote => {
-        if (remote && Object.keys(remote).length === 4) todayItems = remote;
-        else todayItems = getTodayItemsByCategory();
-        rebuildTodayMap();
-        const todayTab = document.querySelector('.tab[data-tab="today"]');
-        if (todayTab && todayTab.classList.contains('active')) renderToday();
-        updateLibCount();
-      });
+      todayItems = getTodayItemsByCategory();
+      rebuildTodayMap();
+      const todayTab = document.querySelector('.tab[data-tab="today"]');
+      if (todayTab && todayTab.classList.contains('active')) renderToday();
+      updateLibCount();
     }, 60000);
   }
 
