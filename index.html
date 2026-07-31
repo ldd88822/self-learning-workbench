@@ -56,6 +56,60 @@
     .chat-key-setup { background:#fff; border-radius:20px; padding:1.5rem; box-shadow:0 6px 18px rgba(0,0,0,0.04); }
     .chat-key-setup input { width:100%; border:2px solid #e0d7cc; border-radius:12px; padding:0.6rem; margin:0.6rem 0; font-family:inherit; font-size:0.95rem; }
     .chat-quick { display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.4rem; }
+
+    /* ===== 悬浮 AI 助手（动漫头像） ===== */
+    .ai-float-avatar {
+      position:fixed; right:18px; bottom:18px; z-index:9999;
+      width:68px; height:68px; border-radius:50%;
+      overflow:hidden; cursor:pointer;
+      box-shadow:0 4px 20px rgba(196,90,60,0.35), 0 2px 8px rgba(0,0,0,0.15);
+      border:3px solid #fff; transition:transform 0.3s ease, box-shadow 0.3s ease;
+      animation:aiAvatarPulse 2.5s ease-in-out infinite;
+      background:#fff;
+    }
+    .ai-float-avatar:hover { transform:scale(1.08); box-shadow:0 6px 28px rgba(196,90,60,0.45), 0 3px 12px rgba(0,0,0,0.2); }
+    .ai-float-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+    .ai-float-avatar .ai-badge {
+      position:absolute; bottom:-2px; right:-2px;
+      width:22px; height:22px; background:#c45a3c; color:#fff;
+      border-radius:50%; font-size:12px; display:flex; align-items:center; justify-content:center;
+      border:2px solid #fff; font-weight:700;
+    }
+
+    @keyframes aiAvatarPulse {
+      0%,100% { box-shadow:0 4px 20px rgba(196,90,60,0.35), 0 2px 8px rgba(0,0,0,0.15); }
+      50% { box-shadow:0 6px 28px rgba(196,90,60,0.55), 0 4px 16px rgba(0,0,0,0.25); }
+    }
+
+    /* 弹出聊天面板 */
+    .ai-chat-popup {
+      position:fixed; right:18px; bottom:92px; z-index:9998;
+      width:380px; max-width:calc(100vw - 36px);
+      height:520px; max-height:calc(100vh - 130px);
+      background:#fff; border-radius:20px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.18), 0 2px 12px rgba(0,0,0,0.08);
+      display:none; flex-direction:column; overflow:hidden;
+      animation:aiPopupIn 0.3s ease;
+      border:1px solid #e8dfd4;
+    }
+    .ai-chat-popup.open { display:flex; }
+    @keyframes aiPopupIn { from{opacity:0; transform:translateY(16px) scale(0.96);} to{opacity:1; transform:translateY(0) scale(1);} }
+
+    .ai-popup-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0.9rem 1.1rem; background:linear-gradient(135deg,#c45a3c,#d4715a); color:#fff;
+      flex-shrink:0;
+    }
+    .ai-popup-header .ai-name { font-weight:700; font-size:1rem; display:flex; align-items:center; gap:0.4rem; }
+    .ai-popup-header .ai-close {
+      width:28px; height:28px; border-radius:50%; border:none; background:rgba(255,255,255,0.2);
+      color:#fff; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+      transition:background 0.2s;
+    }
+    .ai-popup-header .ai-close:hover { background:rgba(255,255,255,0.35); }
+
+    .ai-popup-body { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+    .ai-popup-body .chat-box { height:100%; min-height:0; }
   </style>
 </head>
 <body>
@@ -69,6 +123,19 @@
   <div class="tab" data-tab="chat">💬 聊天助手</div>
 </div>
 <div class="container" id="app-container"></div>
+
+<!-- 悬浮 AI 助手（动漫头像） -->
+<div class="ai-float-avatar" id="aiFloatAvatar" title="点击与 AI 助手对话">
+  <img src="./avatar.jpg" alt="AI 助手" />
+  <div class="ai-badge">💬</div>
+</div>
+<div class="ai-chat-popup" id="aiChatPopup">
+  <div class="ai-popup-header">
+    <div class="ai-name">🤖 AI 学习助手</div>
+    <button class="ai-close" id="aiPopupClose">✕</button>
+  </div>
+  <div class="ai-popup-body" id="aiPopupBody"></div>
+</div>
 
 <script>
 (function() {
@@ -540,6 +607,125 @@
       setChatHistory([]); renderChat();
     });
   }
+
+  // ==================== 悬浮 AI 助手（动漫头像插件） ====================
+  const aiAvatar = document.getElementById('aiFloatAvatar');
+  const aiPopup = document.getElementById('aiChatPopup');
+  const aiPopupBody = document.getElementById('aiPopupBody');
+  const aiClose = document.getElementById('aiPopupClose');
+  let aiPopupOpen = false;
+
+  function toggleAiPopup() {
+    aiPopupOpen = !aiPopupOpen;
+    if (aiPopupOpen) {
+      aiPopup.classList.add('open');
+      aiAvatar.style.animation = 'none';
+      // 在弹窗内渲染聊天（复用 renderChat 的逻辑，但渲染到 aiPopupBody）
+      renderFloatChat();
+    } else {
+      aiPopup.classList.remove('open');
+      aiAvatar.style.animation = '';
+    }
+  }
+
+  function renderFloatChat() {
+    const key = localStorage.getItem('deepseek_key');
+    if (!key) {
+      aiPopupBody.innerHTML = `
+        <div style="padding:1.5rem; text-align:center;">
+          <div style="font-size:2rem;margin-bottom:0.5rem;">🔑</div>
+          <div style="font-weight:700;font-size:1rem;margin-bottom:0.4rem;">需要 API Key</div>
+          <div style="font-size:0.85rem;color:#8b7a6b;margin-bottom:0.8rem;line-height:1.6;">
+            请输入你的 DeepSeek Key<br><span style="font-size:0.78rem;color:#a69484;">仅存本机浏览器，不上传服务器</span>
+          </div>
+          <input id="floatKeyInput" type="password" placeholder="粘贴 sk- 开头的 key"
+            style="width:100%;border:2px solid #e0d7cc;border-radius:12px;padding:0.6rem;font-family:inherit;font-size:0.9rem;outline:none;" />
+          <button id="floatKeySave" class="btn btn-primary" style="margin-top:0.6rem;width:100%;">保存并开始</button>
+          <div style="font-size:0.75rem;color:#a69484;margin-top:0.5rem;">
+            <a href="https://platform.deepseek.com" target="_blank" style="color:#c45a3c;text-decoration:none;">去 DeepSeek 创建 Key →</a>
+          </div>
+        </div>`;
+      document.getElementById('floatKeySave').addEventListener('click', () => {
+        const v = document.getElementById('floatKeyInput').value.trim();
+        if (!v) { alert('请输入 key'); return; }
+        localStorage.setItem('deepseek_key', v);
+        renderFloatChat();
+      });
+      return;
+    }
+
+    // 有 key → 渲染完整聊天界面
+    const history = getChatHistory();
+    aiPopupBody.innerHTML = `
+      <div class="chat-box" style="height:100%;">
+        <div class="chat-scroll" id="floatChatScroll"></div>
+        <div class="chat-quick" style="padding:0 0.5rem;">
+          <button class="btn btn-outline btn-small" data-q="用通俗的话讲讲第一次世界大战是怎么打起来的？">🌍 历史</button>
+          <button class="btn btn-outline btn-small" data-q="给我一个写周报的 AI 提示词模板">🤖 AI技巧</button>
+          <button class="btn btn-outline btn-small" data-q="《实践论》的核心思想是什么？">📕 毛选</button>
+          <button class="btn btn-outline btn-small" id="floatClear">🗑 清空</button>
+        </div>
+        <div class="chat-input-row" style="padding:0 0.5rem 0.6rem;">
+          <input class="chat-input" id="floatChatInput" placeholder="问历史、AI技巧或毛选…" />
+          <button class="btn btn-primary" id="floatChatSend">发送</button>
+        </div>
+      </div>`;
+
+    const fScroll = document.getElementById('floatChatScroll');
+    // 复用 appendMsg 但指定容器
+    function fAppend(role, text) {
+      const el = document.createElement('div');
+      el.className = 'chat-msg ' + role;
+      el.textContent = text;
+      fScroll.appendChild(el);
+      fScroll.scrollTop = fScroll.scrollHeight;
+      return el;
+    }
+    history.forEach(m => fAppend(m.role, m.content));
+
+    const fInput = document.getElementById('floatChatInput');
+    const fSend = async () => {
+      const text = fInput.value.trim();
+      if (!text) return;
+      fInput.value = '';
+      fAppend('user', text);
+      const hist = getChatHistory();
+      hist.push({ role:'user', content:text });
+      const botEl = fAppend('bot', '⏳ 思考中…');
+      try {
+        const resp = await fetch('https://api.deepseek.com/chat/completions', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+key },
+          body:JSON.stringify({
+            model:'deepseek-chat',
+            temperature:0.7,
+            messages:[{role:'system',content:CHAT_SYS}, ...hist.map(m=>({role:m.role,content:m.content}))]
+          })
+        });
+        if (!resp.ok) throw new Error('HTTP '+resp.status);
+        const data = await resp.json();
+        const ans = data.choices?.[0]?.message?.content || '（空响应）';
+        botEl.textContent = ans;
+        hist.push({ role:'bot', content:ans });
+        setChatHistory(hist);
+      } catch(e) {
+        botEl.textContent = '⚠ 调用失败：'+e.message;
+        botEl.classList.add('error');
+        hist.pop();
+      }
+    };
+    document.getElementById('floatChatSend').addEventListener('click', fSend);
+    fInput.addEventListener('keydown', e=>{ if(e.key==='Enter') fSend(); });
+    aiPopupBody.querySelectorAll('.chat-quick [data-q]').forEach(b=>
+      b.addEventListener('click', ()=>{ fInput.value=b.dataset.q; fSend(); }));
+    document.getElementById('floatClear').addEventListener('click', ()=>{
+      setChatHistory([]); renderFloatChat();
+    });
+  }
+
+  // 绑定事件
+  aiAvatar.addEventListener('click', toggleAiPopup);
+  aiClose.addEventListener('click', ()=>{ aiPopupOpen=false; aiPopup.classList.remove('open'); aiAvatar.style.animation=''; });
 
   // ==================== Tab切换 ====================
   tabs.forEach(tab => {
