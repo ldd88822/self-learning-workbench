@@ -110,6 +110,22 @@
 
     .ai-popup-body { flex:1; overflow:hidden; display:flex; flex-direction:column; }
     .ai-popup-body .chat-box { height:100%; min-height:0; }
+    /* 我们的计划（协作模块） */
+    .plan-card, .plan-proj, .plan-task, .plan-note, .plan-ai { background:#fff; border:1px solid #ece3d8; border-radius:14px; padding:1rem; margin-bottom:0.8rem; }
+    .plan-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem; }
+    .plan-space { font-size:0.78rem; color:#a69484; }
+    .plan-proj { cursor:pointer; transition:transform .15s, box-shadow .15s; }
+    .plan-proj:hover { transform:translateY(-2px); box-shadow:0 4px 14px rgba(196,90,60,0.12); }
+    .plan-proj-title { font-weight:700; font-size:1rem; }
+    .plan-proj-sub { font-size:0.78rem; color:#a69484; margin-top:0.2rem; }
+    .plan-empty { color:#a69484; font-size:0.85rem; padding:0.6rem 0; }
+    .plan-task { display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0; border-bottom:1px dashed #f0e9df; }
+    .plan-task span { flex:1; }
+    .plan-done { text-decoration:line-through; color:#b3a595; }
+    .plan-x { border:none; background:none; color:#cc9988; cursor:pointer; font-size:0.85rem; }
+    .plan-note { padding:0.4rem 0; border-bottom:1px dashed #f0e9df; display:flex; justify-content:space-between; gap:0.5rem; }
+    .plan-ai { white-space:pre-wrap; line-height:1.7; color:#4a3b2e; margin-top:0.6rem; font-size:0.92rem; }
+    .plan-msg { color:#a69484; font-size:0.85rem; margin-top:0.5rem; }
   </style>
 </head>
 <body>
@@ -121,6 +137,7 @@
   <div class="tab active" data-tab="today">✨ 今日推送</div>
   <div class="tab" data-tab="library">📖 学习库 <span id="libCount" style="font-size:0.7rem; background:#c45a3c; color:#fff; padding:0.1rem 0.5rem; border-radius:10px; margin-left:0.2rem; display:none;">0</span></div>
   <div class="tab" data-tab="chat">💬 聊天助手</div>
+  <div class="tab" data-tab="plan">🤝 我们的计划</div>
 </div>
 <div class="container" id="app-container"></div>
 
@@ -518,16 +535,17 @@
   // ==================== 聊天助手 ====================
   const CHAT_SYS = '你是「自我学习工作台」的AI助手，专门帮助用户学习三类知识：1)世界历史与中国历史；2)AI工具使用技巧与提示词工程；3)毛泽东选集的思想与方法论。回答要准确、有脉络、通俗易懂，适当引用史实或原文。若用户问及无关话题，礼貌引导回这三类主题。';
 
-  // 代理地址：部署在腾讯云 CloudBase 的云函数（你的 key 只存在服务器端，不进前端、不暴露给朋友）
-  // 部署后把函数 URL 填到引号里；留空则只有自己填了本地 key 才能聊
-  const PROXY_URL = '';
+  // 云端地址：腾讯云 CloudBase「api」云函数的 HTTP 访问地址。
+  // 部署后把地址填到引号里，前端即可免 key 使用 AI 聊天 + 共享计划（key 只存在服务器端）。
+  const API_BASE = '';
 
-  // 统一调用：有本地 key 直连 DeepSeek；否则走代理（代理持有你的 key）
-  async function callDeepSeek(messages) {
+  // 统一调用：有本地 key 直连 DeepSeek；否则走云端代理（代理持有你的 key）。system 可选，用于切换聊天/规划人设
+  async function callDeepSeek(messages, system) {
+    const sys = system || CHAT_SYS;
     const payload = JSON.stringify({
       model: 'deepseek-chat',
       temperature: 0.7,
-      messages: [{ role: 'system', content: CHAT_SYS }, ...messages]
+      messages: [{ role: 'system', content: sys }, ...messages]
     });
     const localKey = localStorage.getItem('deepseek_key');
     if (localKey) {
@@ -540,17 +558,210 @@
       const data = await resp.json();
       return data.choices?.[0]?.message?.content || '（空响应）';
     }
-    if (PROXY_URL) {
-      const resp = await fetch(PROXY_URL, {
+    if (API_BASE) {
+      const resp = await fetch(API_BASE + '/api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: payload
+        body: JSON.stringify({ action: 'chat', messages, system: sys })
       });
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const data = await resp.json();
       return data.choices?.[0]?.message?.content || '（空响应）';
     }
-    throw new Error('未配置 Key，且未设置代理地址');
+    throw new Error('未配置 Key，且未设置代理地址（API_BASE）');
+  }
+
+  // ==================== 我们的计划（双人协作） ====================
+  const PLAN_SYS = '你是「我们的计划」双人协作规划助手。用户会和伴侣或搭档一起做计划（旅游、创业、日常安排等）。请以温暖、务实的「规划顾问」口吻，分析计划的可行性、潜在风险、时间/预算排期建议，并指出容易遗漏的点。用中文、分点、给出可操作的下一步。';
+  let planState = { spaceId: null, data: null, openProjectId: null };
+  function planNewId() { return Math.random().toString(36).slice(2, 9); }
+  function planDefaultSpace() { return { name: '我们的空间', projects: [] }; }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  async function planGet(spaceId) {
+    if (!API_BASE) throw new Error('未配置云端地址（API_BASE 为空）');
+    const resp = await fetch(API_BASE + '/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'plan', op: 'get', spaceId }) });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const j = await resp.json();
+    return j.data || null;
+  }
+  async function planSave(spaceId, data) {
+    if (!API_BASE) throw new Error('未配置云端地址（API_BASE 为空）');
+    const resp = await fetch(API_BASE + '/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'plan', op: 'save', spaceId, data }) });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return true;
+  }
+
+  async function renderPlan() {
+    const container = document.getElementById('app-container');
+    const spaceId = localStorage.getItem('plan_space_id');
+
+    // 视图1：未加入空间
+    if (!spaceId) {
+      container.innerHTML = `
+        <div class="plan-card">
+          <h2 style="margin:0 0 .3rem;">🤝 我们的计划</h2>
+          <p style="color:#8b7a6b;line-height:1.7;">和 TA 一起做旅游、创业、日常安排。创建一个空间，把空间ID发给 TA，TA 输入同一ID即可共享同一份计划，AI 还能帮你们分析。</p>
+          <button id="planCreate" class="btn btn-primary">＋ 创建新空间</button>
+          <div style="margin:1.2rem 0 .4rem;font-weight:700;">或加入 TA 的空间：</div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <input id="planJoinInput" placeholder="粘贴空间ID，如 space-7f3a9c" style="flex:1;min-width:160px;border:2px solid #e0d7cc;border-radius:12px;padding:.6rem;font-family:inherit;font-size:.9rem;outline:none;" />
+            <button id="planJoin" class="btn btn-outline">加入</button>
+          </div>
+          <div id="planMsg" class="plan-msg"></div>
+        </div>`;
+      document.getElementById('planCreate').onclick = async () => {
+        const id = 'space-' + planNewId();
+        localStorage.setItem('plan_space_id', id);
+        planState = { spaceId: id, data: planDefaultSpace(), openProjectId: null };
+        await planSave(id, planState.data);
+        renderPlan();
+      };
+      document.getElementById('planJoin').onclick = async () => {
+        const id = document.getElementById('planJoinInput').value.trim();
+        if (!id) return;
+        const msg = document.getElementById('planMsg');
+        msg.textContent = '⏳ 连接中…';
+        try {
+          const d = await planGet(id);
+          localStorage.setItem('plan_space_id', id);
+          planState = { spaceId: id, data: d || planDefaultSpace(), openProjectId: null };
+          renderPlan();
+        } catch (e) { msg.textContent = '⚠ ' + e.message; }
+      };
+      return;
+    }
+
+    // 加载数据
+    if (!planState.data || planState.spaceId !== spaceId) {
+      container.innerHTML = '<div class="plan-msg">⏳ 加载空间数据…</div>';
+      try { planState = { spaceId, data: await planGet(spaceId) || planDefaultSpace(), openProjectId: null }; }
+      catch (e) { container.innerHTML = '<div class="plan-msg">⚠ 加载失败：' + escapeHtml(e.message) + '<br>请确认 API_BASE 已配置、云函数已部署。</div>'; return; }
+    }
+
+    // 视图3：项目详情
+    if (planState.openProjectId) { renderPlanProject(container); return; }
+
+    // 视图2：项目列表
+    const projects = planState.data.projects || [];
+    const typeIcon = { travel: '✈️', startup: '🚀', daily: '📅', other: '📌' };
+    const cards = projects.map(p => `
+      <div class="plan-proj" data-id="${p.id}">
+        <div class="plan-proj-title">${typeIcon[p.type] || '📌'} ${escapeHtml(p.title)}</div>
+        <div class="plan-proj-sub">${(p.tasks || []).length} 项任务 · ${(p.notes || []).length} 条笔记</div>
+      </div>`).join('') || '<div class="plan-empty">还没有项目，下面创建一个吧 👇</div>';
+
+    container.innerHTML = `
+      <div class="plan-head">
+        <button id="planLeave" class="btn btn-outline btn-small">退出空间</button>
+        <span class="plan-space">空间：${escapeHtml(spaceId)}</span>
+      </div>
+      <h2 style="margin:.6rem 0;">📋 项目</h2>
+      <div class="plan-proj-list">${cards}</div>
+      <div style="margin-top:1rem;font-weight:700;">＋ 新建项目</div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem;">
+        <select id="projType" style="border:2px solid #e0d7cc;border-radius:12px;padding:.5rem;font-family:inherit;">
+          <option value="travel">✈️ 旅游</option>
+          <option value="startup">🚀 创业</option>
+          <option value="daily">📅 日常</option>
+          <option value="other">📌 其他</option>
+        </select>
+        <input id="projTitle" placeholder="项目标题，如「国庆日本游」" style="flex:1;min-width:160px;border:2px solid #e0d7cc;border-radius:12px;padding:.5rem;font-family:inherit;font-size:.9rem;outline:none;" />
+        <button id="projAdd" class="btn btn-primary">创建</button>
+      </div>`;
+
+    container.querySelectorAll('.plan-proj').forEach(el => {
+      el.onclick = () => { planState.openProjectId = el.dataset.id; renderPlan(); };
+    });
+    document.getElementById('planLeave').onclick = () => {
+      localStorage.removeItem('plan_space_id');
+      planState = { spaceId: null, data: null, openProjectId: null };
+      renderPlan();
+    };
+    document.getElementById('projAdd').onclick = async () => {
+      const title = document.getElementById('projTitle').value.trim();
+      if (!title) return;
+      const type = document.getElementById('projType').value;
+      planState.data.projects = planState.data.projects || [];
+      planState.data.projects.unshift({ id: planNewId(), type, title, desc: '', tasks: [], notes: [], analysis: '' });
+      await planSave(planState.spaceId, planState.data);
+      renderPlan();
+    };
+  }
+
+  async function renderPlanProject(container) {
+    const p = (planState.data.projects || []).find(x => x.id === planState.openProjectId);
+    if (!p) { planState.openProjectId = null; renderPlan(); return; }
+    const typeIcon = { travel: '✈️', startup: '🚀', daily: '📅', other: '📌' };
+    const tasks = (p.tasks || []).map(t => `
+      <div class="plan-task">
+        <input type="checkbox" data-tid="${t.id}" ${t.done ? 'checked' : ''} />
+        <span class="${t.done ? 'plan-done' : ''}">${escapeHtml(t.text)}</span>
+        <button class="plan-x" data-tid="${t.id}">✕</button>
+      </div>`).join('') || '<div class="plan-empty">暂无任务</div>';
+    const notes = (p.notes || []).map(n => `
+      <div class="plan-note">${escapeHtml(n.text)} <button class="plan-x" data-nid="${n.id}">✕</button></div>`).join('') || '<div class="plan-empty">暂无笔记</div>';
+
+    container.innerHTML = `
+      <button id="projBack" class="btn btn-outline btn-small">← 返回项目列表</button>
+      <h2 style="margin:.6rem 0 .2rem;">${typeIcon[p.type] || '📌'} ${escapeHtml(p.title)}</h2>
+      <textarea id="projDesc" placeholder="补充这个项目的总体想法…" style="width:100%;border:2px solid #e0d7cc;border-radius:12px;padding:.6rem;font-family:inherit;font-size:.9rem;outline:none;resize:vertical;min-height:60px;">${escapeHtml(p.desc || '')}</textarea>
+
+      <h3 style="margin:1rem 0 .4rem;">✅ 任务清单</h3>
+      <div class="plan-task-list">${tasks}</div>
+      <div style="display:flex;gap:.5rem;margin-top:.4rem;">
+        <input id="taskInput" placeholder="添加任务，如「订机票」" style="flex:1;border:2px solid #e0d7cc;border-radius:12px;padding:.5rem;font-family:inherit;font-size:.9rem;outline:none;" />
+        <button id="taskAdd" class="btn btn-primary btn-small">添加</button>
+      </div>
+
+      <h3 style="margin:1rem 0 .4rem;">📝 笔记</h3>
+      <div class="plan-note-list">${notes}</div>
+      <div style="display:flex;gap:.5rem;margin-top:.4rem;">
+        <input id="noteInput" placeholder="记一笔想法…" style="flex:1;border:2px solid #e0d7cc;border-radius:12px;padding:.5rem;font-family:inherit;font-size:.9rem;outline:none;" />
+        <button id="noteAdd" class="btn btn-primary btn-small">添加</button>
+      </div>
+
+      <h3 style="margin:1rem 0 .4rem;">🤖 AI 分析</h3>
+      <button id="aiAnalyze" class="btn btn-primary">让 AI 分析这个计划</button>
+      <div id="aiResult" class="plan-ai">${p.analysis ? escapeHtml(p.analysis) : '点击上方按钮，让 AI 以规划顾问视角分析可行性、风险与排期建议。'}</div>
+    `;
+
+    document.getElementById('projBack').onclick = () => { planState.openProjectId = null; renderPlan(); };
+    document.getElementById('projDesc').onchange = async (e) => { p.desc = e.target.value; await planSave(planState.spaceId, planState.data); };
+
+    document.getElementById('taskAdd').onclick = async () => {
+      const v = document.getElementById('taskInput').value.trim(); if (!v) return;
+      p.tasks = p.tasks || []; p.tasks.push({ id: planNewId(), text: v, done: false });
+      await planSave(planState.spaceId, planState.data); renderPlanProject(container);
+    };
+    document.getElementById('noteAdd').onclick = async () => {
+      const v = document.getElementById('noteInput').value.trim(); if (!v) return;
+      p.notes = p.notes || []; p.notes.push({ id: planNewId(), text: v });
+      await planSave(planState.spaceId, planState.data); renderPlanProject(container);
+    };
+    container.querySelectorAll('.plan-task input[type=checkbox]').forEach(cb => {
+      cb.onchange = async () => {
+        const t = p.tasks.find(x => x.id === cb.dataset.tid); if (t) t.done = cb.checked;
+        await planSave(planState.spaceId, planState.data);
+      };
+    });
+    container.querySelectorAll('.plan-task .plan-x').forEach(b => {
+      b.onclick = async () => { p.tasks = p.tasks.filter(x => x.id !== b.dataset.tid); await planSave(planState.spaceId, planState.data); renderPlanProject(container); };
+    });
+    container.querySelectorAll('.plan-note .plan-x').forEach(b => {
+      b.onclick = async () => { p.notes = p.notes.filter(x => x.id !== b.dataset.nid); await planSave(planState.spaceId, planState.data); renderPlanProject(container); };
+    });
+    document.getElementById('aiAnalyze').onclick = async () => {
+      const btn = document.getElementById('aiAnalyze'); const box = document.getElementById('aiResult');
+      btn.disabled = true; btn.textContent = '⏳ 分析中…';
+      const summary = `项目类型：${p.type}\n标题：${p.title}\n描述：${p.desc || '（无）'}\n任务：${(p.tasks || []).map(t => (t.done ? '[已完成]' : '[待办]') + t.text).join('；') || '（无）'}\n笔记：${(p.notes || []).map(n => n.text).join('；') || '（无）'}`;
+      try {
+        const ans = await callDeepSeek([{ role: 'user', content: '请分析以下计划：\n' + summary }], PLAN_SYS);
+        p.analysis = ans; await planSave(planState.spaceId, planState.data);
+        box.textContent = ans;
+      } catch (e) { box.textContent = '⚠ 分析失败：' + e.message; }
+      btn.disabled = false; btn.textContent = '让 AI 分析这个计划';
+    };
   }
 
   function getChatHistory() { try { return JSON.parse(localStorage.getItem('chat_history') || '[]'); } catch (e) { return []; } }
@@ -569,7 +780,7 @@
     const container = document.getElementById('app-container');
     const key = localStorage.getItem('deepseek_key');
     // 有本地 key 或已配置代理，都能聊天；都没有才提示填 key
-    if (!key && !PROXY_URL) {
+    if (!key && !API_BASE) {
       container.innerHTML = `
         <div class="chat-key-setup">
           <div class="title">🔑 配置 DeepSeek API Key</div>
@@ -657,7 +868,7 @@
   function renderFloatChat() {
     const key = localStorage.getItem('deepseek_key');
     // 有本地 key 或已配置代理，都能聊天；都没有才提示填 key
-    if (!key && !PROXY_URL) {
+    if (!key && !API_BASE) {
       aiPopupBody.innerHTML = `
         <div style="padding:1.5rem; text-align:center;">
           <div style="font-size:2rem;margin-bottom:0.5rem;">🔑</div>
@@ -752,6 +963,7 @@
       if (t === 'today') renderToday();
       else if (t === 'library') renderLibrary();
       else if (t === 'chat') renderChat();
+      else if (t === 'plan') renderPlan();
     });
   });
 
