@@ -60,10 +60,10 @@
     /* ===== 悬浮 AI 助手（动漫头像） ===== */
     .ai-float-avatar {
       position:fixed; right:18px; bottom:18px; z-index:9999;
-      width:68px; height:68px; border-radius:50%;
+      width:80px; height:90px; border-radius:18px 18px 28px 28px;
       overflow:hidden; cursor:pointer;
       box-shadow:0 4px 20px rgba(196,90,60,0.35), 0 2px 8px rgba(0,0,0,0.15);
-      border:3px solid #fff; transition:transform 0.3s ease, box-shadow 0.3s ease;
+      border:2.5px solid #fff; transition:transform 0.3s ease, box-shadow 0.3s ease;
       animation:aiAvatarPulse 2.5s ease-in-out infinite;
       background:#fff;
     }
@@ -83,7 +83,7 @@
 
     /* 弹出聊天面板 */
     .ai-chat-popup {
-      position:fixed; right:18px; bottom:92px; z-index:9998;
+      position:fixed; right:18px; bottom:116px; z-index:9998;
       width:380px; max-width:calc(100vw - 36px);
       height:520px; max-height:calc(100vh - 130px);
       background:#fff; border-radius:20px;
