@@ -43,6 +43,19 @@
     .counter { font-size:0.8rem; color:#a69484; margin-bottom:0.8rem; }
     .multi-card-grid { display: flex; flex-direction: column; gap: 1rem; }
     @media (max-width:400px) { .btn { padding:0.5rem 1rem; font-size:0.8rem; } }
+    /* 聊天助手 */
+    .chat-box { display:flex; flex-direction:column; height: calc(100vh - 200px); min-height:340px; }
+    .chat-scroll { flex:1; overflow-y:auto; padding:0.5rem 0; display:flex; flex-direction:column; }
+    .chat-msg { max-width:85%; padding:0.7rem 1rem; border-radius:16px; margin-bottom:0.7rem; line-height:1.65; font-size:0.92rem; white-space:pre-wrap; word-break:break-word; }
+    .chat-msg.user { align-self:flex-end; background:#c45a3c; color:#fff; border-bottom-right-radius:4px; }
+    .chat-msg.bot { align-self:flex-start; background:#fff; color:#2e241f; border-bottom-left-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+    .chat-msg.bot.error { background:#fde8e0; color:#b53b2c; }
+    .chat-input-row { display:flex; gap:0.5rem; margin-top:0.5rem; }
+    .chat-input { flex:1; border:2px solid #e0d7cc; border-radius:20px; padding:0.6rem 1rem; font-size:0.92rem; outline:none; font-family:inherit; }
+    .chat-input:focus { border-color:#c45a3c; }
+    .chat-key-setup { background:#fff; border-radius:20px; padding:1.5rem; box-shadow:0 6px 18px rgba(0,0,0,0.04); }
+    .chat-key-setup input { width:100%; border:2px solid #e0d7cc; border-radius:12px; padding:0.6rem; margin:0.6rem 0; font-family:inherit; font-size:0.95rem; }
+    .chat-quick { display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.4rem; }
   </style>
 </head>
 <body>
@@ -53,6 +66,7 @@
 <div class="tab-bar">
   <div class="tab active" data-tab="today">✨ 今日推送</div>
   <div class="tab" data-tab="library">📖 学习库 <span id="libCount" style="font-size:0.7rem; background:#c45a3c; color:#fff; padding:0.1rem 0.5rem; border-radius:10px; margin-left:0.2rem; display:none;">0</span></div>
+  <div class="tab" data-tab="chat">💬 聊天助手</div>
 </div>
 <div class="container" id="app-container"></div>
 
@@ -434,12 +448,108 @@
     }
   }
 
+  // ==================== 聊天助手 ====================
+  const CHAT_SYS = '你是「自我学习工作台」的AI助手，专门帮助用户学习三类知识：1)世界历史与中国历史；2)AI工具使用技巧与提示词工程；3)毛泽东选集的思想与方法论。回答要准确、有脉络、通俗易懂，适当引用史实或原文。若用户问及无关话题，礼貌引导回这三类主题。';
+  function getChatHistory() { try { return JSON.parse(localStorage.getItem('chat_history') || '[]'); } catch (e) { return []; } }
+  function setChatHistory(arr) { localStorage.setItem('chat_history', JSON.stringify(arr)); }
+  function appendMsg(role, text) {
+    const scroll = document.getElementById('chatScroll');
+    if (!scroll) return null;
+    const el = document.createElement('div');
+    el.className = 'chat-msg ' + (role === 'user' ? 'user' : 'bot');
+    el.textContent = text;
+    scroll.appendChild(el);
+    scroll.scrollTop = scroll.scrollHeight;
+    return el;
+  }
+  function renderChat() {
+    const container = document.getElementById('app-container');
+    const key = localStorage.getItem('deepseek_key');
+    if (!key) {
+      container.innerHTML = `
+        <div class="chat-key-setup">
+          <div class="title">🔑 配置 DeepSeek API Key</div>
+          <div class="content">聊天助手需要你的 DeepSeek key 才能运行。key 仅保存在你本机浏览器（localStorage），不会上传到任何服务器。</div>
+          <input id="chatKeyInput" type="password" placeholder="粘贴 sk- 开头的 key" />
+          <div class="btn-group">
+            <button class="btn btn-primary" id="chatKeySave">保存并开始</button>
+          </div>
+          <div class="source">还没有 key？去 platform.deepseek.com → API Keys 免费创建。</div>
+        </div>`;
+      document.getElementById('chatKeySave').addEventListener('click', () => {
+        const v = document.getElementById('chatKeyInput').value.trim();
+        if (!v) { alert('请输入 key'); return; }
+        localStorage.setItem('deepseek_key', v);
+        renderChat();
+      });
+      return;
+    }
+    const history = getChatHistory();
+    container.innerHTML = `
+      <div class="chat-box">
+        <div class="chat-scroll" id="chatScroll"></div>
+        <div class="chat-quick">
+          <button class="btn btn-outline btn-small" data-q="用通俗的话讲讲第一次世界大战是怎么打起来的？">🌍 历史</button>
+          <button class="btn btn-outline btn-small" data-q="给我一个写周报的 AI 提示词模板">🤖 AI技巧</button>
+          <button class="btn btn-outline btn-small" data-q="《实践论》的核心思想是什么？">📕 毛选</button>
+          <button class="btn btn-outline btn-small" id="chatClear">🗑 清空</button>
+        </div>
+        <div class="chat-input-row">
+          <input class="chat-input" id="chatInput" placeholder="问历史、AI技巧或毛选…" />
+          <button class="btn btn-primary" id="chatSend">发送</button>
+        </div>
+      </div>`;
+    history.forEach(m => appendMsg(m.role, m.content));
+    const input = document.getElementById('chatInput');
+    const send = async () => {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      appendMsg('user', text);
+      const hist = getChatHistory();
+      hist.push({ role: 'user', content: text });
+      const botEl = appendMsg('bot', '⏳ 思考中…');
+      try {
+        const resp = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            temperature: 0.7,
+            messages: [{ role: 'system', content: CHAT_SYS }, ...hist.map(m => ({ role: m.role, content: m.content }))]
+          })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        const ans = data.choices?.[0]?.message?.content || '（空响应）';
+        botEl.textContent = ans;
+        hist.push({ role: 'bot', content: ans });
+        setChatHistory(hist);
+      } catch (e) {
+        botEl.textContent = '⚠ 调用失败：' + e.message + '\n请检查 key 是否正确、网络能否访问 DeepSeek。';
+        botEl.classList.add('error');
+        hist.pop();
+      }
+    };
+    document.getElementById('chatSend').addEventListener('click', send);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    document.querySelectorAll('.chat-quick [data-q]').forEach(b => b.addEventListener('click', () => {
+      input.value = b.dataset.q; send();
+    }));
+    document.getElementById('chatClear').addEventListener('click', () => {
+      setChatHistory([]); renderChat();
+    });
+  }
+
   // ==================== Tab切换 ====================
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      tab.dataset.tab === 'today' ? renderToday() : renderLibrary();
+      const t = tab.dataset.tab;
+      if (t === 'today') renderToday();
+      else if (t === 'library') renderLibrary();
+      else if (t === 'chat') renderChat();
     });
   });
 
