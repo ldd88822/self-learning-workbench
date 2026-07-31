@@ -308,9 +308,6 @@
         💡 点浏览器菜单“添加到主屏幕”，随时学习
         <button id="closeBannerBtn">✕</button>
       </div>
-      <div style="text-align:right;margin-bottom:0.8rem;">
-        <button class="btn btn-outline btn-small" id="realHistoryBtn">🌐 真实历史</button>
-      </div>
       <div class="multi-card-grid">
         ${cardsHtml}
       </div>
@@ -343,25 +340,6 @@
       });
     });
 
-    // 手动拉取「真实历史上的今天」（维基），由用户主动触发，避免自动跳动
-    const rhBtn = document.getElementById('realHistoryBtn');
-    if (rhBtn) rhBtn.addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      if (IS_LOCAL) { alert('本地打开无法访问远程，请部署到线上后使用该功能。'); return; }
-      btn.textContent = '⏳ 获取中…';
-      btn.disabled = true;
-      const remote = await fetchRemoteKnowledge();
-      btn.disabled = false;
-      btn.textContent = '🌐 真实历史';
-      if (remote && remote.world && remote.world.source && remote.world.source.includes('维基百科')) {
-        todayItems = { ...todayItems, world: remote.world, china: remote.china, mao: remote.mao, ai: remote.ai };
-        rebuildTodayMap();
-        renderToday();
-        updateLibCount();
-      } else {
-        alert('维基暂不可用（可能被墙或网络不通）。\n内置知识已按日期轮换，可在能访问维基的网络下重试。');
-      }
-    });
   }
 
   function toggleMarkById(id) {
